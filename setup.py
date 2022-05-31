@@ -27,7 +27,7 @@ setup(
     py_modules=["macchiato"],
     install_requires=["black"],
     python_requires=">=3.6",
-    entry_points={"console_scripts": ["black-macchiato = macchiato:main"]},
+    entry_points={"console_scripts": ["black-macchiato = macchiato:main", "black-macchiato-strip = macchiato:main_strip"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",

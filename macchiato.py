@@ -2,6 +2,7 @@ import itertools
 import os
 import sys
 import tempfile
+import textwrap
 import tokenize
 from typing import IO, Iterable, List, NamedTuple, Optional, Tuple, cast
 
@@ -19,6 +20,7 @@ class WrapInfo(NamedTuple):
     n_blank_before: int = 0
     n_blank_after: int = 0
     n_fake_before: int = 0
+    n_indent: int = 0
     trailing_fake_pass: bool = False
 
 
@@ -63,7 +65,7 @@ def _fake_before_lines(first_line: str) -> List[str]:
     return fake_lines
 
 
-def wrap_lines(lines: List[str]) -> Tuple[List[str], WrapInfo]:
+def wrap_lines(lines: List[str], strip=False) -> Tuple[List[str], WrapInfo]:
     """Wrap the input lines with fake text, to fake a complete source document."""
 
     # Strip leading and trailing blank lines.
@@ -73,6 +75,14 @@ def wrap_lines(lines: List[str]) -> Tuple[List[str], WrapInfo]:
     if not lines:
         wrap_info = WrapInfo(n_blank_before=n_blank_before, n_blank_after=n_blank_after)
         return lines, wrap_info
+
+    ## Strip indent
+    n_indent = 0
+    if strip:
+        spaces = len(lines[0]) - len(lines[0].lstrip())
+        lines = textwrap.dedent("".join(lines)).splitlines(keepends=True)
+        new_spaces = len(lines[0]) - len(lines[0].lstrip())
+        n_indent = spaces - new_spaces
 
     # We may need some preceding fake lines and/or a trailing ``pass``.
     fake_before_lines = _fake_before_lines(lines[0])
@@ -89,6 +99,7 @@ def wrap_lines(lines: List[str]) -> Tuple[List[str], WrapInfo]:
         n_blank_before=n_blank_before,
         n_blank_after=n_blank_after,
         n_fake_before=len(fake_before_lines),
+        n_indent=n_indent,
         trailing_fake_pass=trailing_fake_pass,
     )
     return lines, wrap_info
@@ -132,6 +143,8 @@ def unwrap_lines(lines: List[str], wrap_info: WrapInfo) -> List[str]:
     fmt_n_blank_before, _ = count_surrounding_blank_lines(lines)
     lines = lines[fmt_n_blank_before:]
 
+    lines = [" " * wrap_info.n_indent + line for line in lines]
+
     # Restore blank lines.
     blank_before = ["\n"] * wrap_info.n_blank_before
     blank_after = ["\n"] * wrap_info.n_blank_after
@@ -139,12 +152,12 @@ def unwrap_lines(lines: List[str], wrap_info: WrapInfo) -> List[str]:
     return blank_before + lines + blank_after
 
 
-def macchiato(in_fp: IO[str], out_fp: IO[str], args=None):
+def macchiato(in_fp: IO[str], out_fp: IO[str], args=None, strip=False):
     # Read input.
     lines = in_fp.readlines()
 
     # Build syntactically valid text.
-    lines, wrap_info = wrap_lines(lines)
+    lines, wrap_info = wrap_lines(lines, strip=strip)
 
     # Format.
     try:
@@ -187,6 +200,16 @@ def main():
     try:
         args = sys.argv[1:]
         exit_code = macchiato(sys.stdin, sys.stdout, args)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
+    else:
+        raise SystemExit(exit_code)
+
+
+def main_strip():
+    try:
+        args = sys.argv[1:]
+        exit_code = macchiato(sys.stdin, sys.stdout, args, strip=True)
     except ValueError as exc:
         raise SystemExit(str(exc))
     else:
